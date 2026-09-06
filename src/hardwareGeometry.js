@@ -1,14 +1,48 @@
 import * as THREE from "three";
+import { buildNH_L9i, buildKVR26 } from "./referenceModels.js";
+import {
+  coolerReference,
+  fanReference,
+  memoryReference,
+} from "./hardwareReferences.js";
 
 // One scene unit represents 100 mm. These are generic components, not a vendor CAD model.
 export const hardwareDimensions = {
   board: { pos: [0, 0.25, -0.668], size: [2.44, 3.05, 0.016] },
   socket: { pos: [-0.35, 1, -0.615], size: [0.57, 0.57, 0.08] },
   cpu: { pos: [-0.35, 1, -0.55], size: [0.4, 0.4, 0.05] },
-  cooler: { pos: [-0.35, 1, -0.08], size: [1, 1, 0.8] },
-  cpuFan: { pos: [-0.35, 1, 0.42], size: [1, 1, 0.16] },
-  ram1: { pos: [0.68, 0.95, -0.49], size: [0.035, 1.34, 0.32] },
-  ram2: { pos: [0.96, 0.95, -0.49], size: [0.035, 1.34, 0.32] },
+  cooler: {
+    pos: [-0.35, 1, -0.4085],
+    size: [
+      coolerReference.width / 100,
+      coolerReference.depth / 100,
+      coolerReference.heatsinkHeight / 100,
+    ],
+  },
+  cpuFan: {
+    pos: [-0.35, 1, -0.2235],
+    size: [
+      fanReference.width / 100,
+      fanReference.width / 100,
+      fanReference.height / 100,
+    ],
+  },
+  ram1: {
+    pos: [0.68, 0.95, -0.49],
+    size: [
+      memoryReference.boardThickness / 100,
+      memoryReference.length / 100,
+      memoryReference.height / 100,
+    ],
+  },
+  ram2: {
+    pos: [0.96, 0.95, -0.49],
+    size: [
+      memoryReference.boardThickness / 100,
+      memoryReference.length / 100,
+      memoryReference.height / 100,
+    ],
+  },
   atx: { pos: [1.13, 0.54, -0.59], size: [0.1, 0.51, 0.19] },
   eps: { pos: [-1.02, 1.62, -0.59], size: [0.18, 0.1, 0.19] },
   ssd: { pos: [-0.27, 0.04, -0.65], size: [0.8, 0.22, 0.025] },
@@ -16,9 +50,9 @@ export const hardwareDimensions = {
   sata: { pos: [1.08, -1.13, -0.6], size: [0.22, 0.22, 0.2] },
   pcie: { pos: [-0.67, -0.35, -0.59], size: [0.89, 0.09, 0.13] },
   psu: { pos: [-0.7, -1.88, -0.05], size: [1.6, 0.8, 1.75] },
-  usb: { pos: [-1.335, 0.26, -0.31] },
+  usb: { pos: [-1.335, 0.26, -0.585], size: [0.33, 0.36, 0.15] },
   network: { pos: [-1.335, 0.88, -0.3] },
-  display: { pos: [-1.425, -0.48, 0.05] },
+  display: { pos: [-1.4, -0.49, 0.02], size: [0.2, 0.42, 1.2] },
   case: { size: [3, 4.65, 2.5] },
   panel: { size: [2.98, 4.62, 0.04] },
 };
@@ -195,6 +229,32 @@ export function buildDetailedPart(g, p, helpers) {
     if (rotation) mesh.rotation.set(...rotation);
     g.add(mesh);
   }
+  function rectangle(width, height, x = 0, y = 0) {
+    return new THREE.Shape(
+      [
+        [-width / 2, -height / 2],
+        [width / 2, -height / 2],
+        [width / 2, height / 2],
+        [-width / 2, height / 2],
+        [-width / 2, -height / 2],
+      ].map(([u, v]) => new THREE.Vector2(u + x, v + y)),
+    );
+  }
+  function rearShell(shape, depth, x) {
+    const mesh = new THREE.Mesh(
+      new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false }),
+      new THREE.MeshStandardMaterial({
+        color: metal,
+        metalness: 0.8,
+        roughness: 0.36,
+      }),
+    );
+    // The rear face opens toward -X; the extrusion runs inward toward +X.
+    mesh.rotation.y = Math.PI / 2;
+    mesh.position.x = x;
+    g.add(mesh);
+    return mesh;
+  }
   switch (p.kind) {
     case "board": {
       box(g, p.size, [0, 0, 0], 0x254335);
@@ -277,77 +337,12 @@ export function buildDetailedPart(g, p, helpers) {
       screw(-w * 0.43, -h * 0.43, 0.055, 0.018);
       return true;
     }
-    case "ram": {
-      box(g, p.size, [0, 0, 0], 0x214f39);
-      for (const side of [-1, 1]) {
-        for (let i = 0; i < 8; i++)
-          box(
-            g,
-            [0.018, 0.105, 0.17],
-            [side * (w / 2 + 0.009), -h * 0.41 + i * h * 0.116, 0.03],
-            black,
-          );
-        for (let i = 0; i < 54; i++)
-          if (i !== 25 && i !== 26)
-            box(
-              g,
-              [0.003, 0.012, 0.045],
-              [side * (w / 2 + 0.002), -h * 0.47 + i * h * 0.0176, -d * 0.43],
-              gold,
-            );
-      }
-      box(g, [0.007, h * 0.5, 0.095], [w / 2 + 0.02, 0, 0.04], 0xc9ccc0);
-      label(
-        "DDR4 / DIMM",
-        0.46,
-        [w / 2 + 0.025, 0, 0.04],
-        [0, Math.PI / 2, Math.PI / 2],
-      );
+    case "ram":
+      buildKVR26(g, helpers);
       return true;
-    }
-    case "cooler": {
-      box(g, [0.48, 0.48, 0.075], [0, 0, -d / 2], 0xaf7850, 0.8);
-      for (let i = 0; i < 32; i++)
-        box(
-          g,
-          [w, 0.013, d * 0.73],
-          [0, -h / 2 + (i * h) / 31, 0.1],
-          0xb2b9bc,
-          0.82,
-        );
-      for (const x of [-0.27, -0.09, 0.09, 0.27]) {
-        const points = [
-          new THREE.Vector3(x, -0.42, 0.4),
-          new THREE.Vector3(x, -0.4, -0.25),
-          new THREE.Vector3(x, -0.18, -0.38),
-          new THREE.Vector3(x, 0.18, -0.38),
-          new THREE.Vector3(x, 0.4, -0.25),
-          new THREE.Vector3(x, 0.42, 0.4),
-        ];
-        g.add(
-          new THREE.Mesh(
-            new THREE.TubeGeometry(
-              new THREE.CatmullRomCurve3(points),
-              32,
-              0.024,
-              8,
-              false,
-            ),
-            new THREE.MeshStandardMaterial({
-              color: 0xba875e,
-              metalness: 0.85,
-              roughness: 0.33,
-            }),
-          ),
-        );
-      }
-      for (const x of [-0.32, 0.32])
-        for (const y of [-0.32, 0.32]) {
-          box(g, [0.11, 0.11, 0.08], [x, y, -0.34], metal);
-          screw(x, y, -0.29);
-        }
+    case "cooler":
+      buildNH_L9i(g, helpers);
       return true;
-    }
     case "ssd": {
       box(g, p.size, [0, 0, 0], 0x24453b);
       for (let i = 0; i < 3; i++)
@@ -368,7 +363,13 @@ export function buildDetailedPart(g, p, helpers) {
       return true;
     }
     case "gpu": {
-      box(g, [w, 0.018, d * 0.91], [0, h / 2 - 0.02, -0.02], 0x26473b);
+      // The bare rear PCB supports the video receptacles beyond the heatsink/backplate.
+      box(
+        g,
+        [w + 0.12, 0.018, d * 0.91],
+        [-0.06, h / 2 - 0.02, -0.02],
+        0x26473b,
+      ).userData.feature = "gpu-pcb";
       box(
         g,
         [w * 0.98, 0.025, d * 0.91],
@@ -540,6 +541,96 @@ export function buildDetailedPart(g, p, helpers) {
     }
     case "ports":
     case "network": {
+      if (p.id === "usb") {
+        for (const y of [-0.135, -0.045, 0.045, 0.135]) {
+          const shape = rectangle(0.15, 0.09);
+          shape.holes.push(rectangle(0.125, 0.055));
+          const shell = rearShell(shape, w, -w / 2);
+          shell.position.y = y;
+          shell.userData.feature = "usb-shell";
+          box(g, [0.008, 0.07, 0.14], [w / 2 - 0.004, y, 0], black);
+          box(g, [0.17, 0.013, 0.1], [-w / 2 + 0.095, y - 0.007, 0], 0x356895);
+          for (let pin = 0; pin < 4; pin++)
+            box(
+              g,
+              [0.08, 0.003, 0.008],
+              [-w / 2 + 0.059, y + 0.001, -0.036 + pin * 0.024],
+              gold,
+            );
+          for (let pin = 0; pin < 5; pin++)
+            box(
+              g,
+              [0.022, 0.003, 0.006],
+              [-w / 2 + 0.13, y + 0.001, -0.036 + pin * 0.018],
+              gold,
+            );
+        }
+        return true;
+      }
+      if (p.id === "display") {
+        const bracket = rectangle(d, h);
+        for (const [i, z] of [-0.34, 0, 0.34].entries()) {
+          const hdmi = i === 2;
+          const portWidth = hdmi ? 0.14 : 0.161;
+          const portHeight = hdmi ? 0.045 : 0.048;
+          const bodyHeight = hdmi ? 0.065 : 0.07;
+          const y = 0.111 - bodyHeight / 2;
+          const u = portWidth / 2,
+            v = portHeight / 2;
+          const points = hdmi
+            ? [
+                [-u, v],
+                [u, v],
+                [u, -v + 0.012],
+                [u - 0.016, -v],
+                [-u + 0.016, -v],
+                [-u, -v + 0.012],
+              ]
+            : [
+                [-u, -v],
+                [u, -v],
+                [u, v - 0.016],
+                [u - 0.016, v],
+                [-u, v],
+              ];
+          points.push(points[0]);
+          const opening = () =>
+            new THREE.Shape(points.map(([a, b]) => new THREE.Vector2(a, b)));
+          const hole = new THREE.Path(
+            points.map(([a, b]) => new THREE.Vector2(a - z, b + y)),
+          );
+          bracket.holes.push(hole);
+          const housing = rectangle(portWidth + 0.018, bodyHeight);
+          housing.holes.push(opening());
+          const shell = rearShell(housing, w - 0.012, -w / 2 + 0.012);
+          shell.position.y = y;
+          shell.position.z = z;
+          shell.userData.feature = "video-receptacle";
+          box(
+            g,
+            [0.006, bodyHeight - 0.005, portWidth + 0.014],
+            [w / 2 - 0.003, y, z],
+            black,
+          );
+          box(g, [0.13, 0.012, portWidth * 0.78], [-0.015, y, z], black);
+          for (let pin = 0; pin < 8; pin++)
+            box(
+              g,
+              [0.05, 0.003, 0.006],
+              [
+                -0.041,
+                y + 0.007,
+                z - portWidth * 0.31 + (pin * portWidth * 0.62) / 7,
+              ],
+              gold,
+            );
+        }
+        for (let i = 0; i < 9; i++)
+          bracket.holes.push(rectangle(0.075, 0.085, -0.48 + i * 0.12, -0.11));
+        rearShell(bracket, 0.012, -w / 2).userData.feature = "gpu-io-bracket";
+        box(g, [0.12, 0.012, d], [-w / 2 + 0.06, h / 2 - 0.006, 0], metal, 0.8);
+        return true;
+      }
       box(g, p.size, [0, 0, 0], metal, 0.8);
       const count = p.id === "usb" ? 4 : p.id === "display" ? 3 : 1;
       for (let i = 0; i < count; i++) {

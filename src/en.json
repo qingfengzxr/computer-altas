@@ -1,4 +1,8 @@
 {
+  "含风扇总高 37 mm": "37 mm total height with fan",
+  "实物参考": "Reference hardware",
+  "制造商规格": "Manufacturer specifications",
+  "外形尺寸依照规格；未标注的细节为近似。": "Published dimensions; undimensioned details are approximate.",
   "找到：": "Find: ",
   "播放：": "Play: ",
   "当前浏览器无法启动 3D 渲染。请启用硬件加速后重新加载。部件目录与课程仍可使用。": "This browser could not start 3D rendering. Enable hardware acceleration and reload. The catalog and lessons remain available.",

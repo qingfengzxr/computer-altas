@@ -6,6 +6,8 @@ import { layoutInventory } from "./inventoryLayout";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { hasMainPower, flowSegments } from "./simulation";
 import { buildDetailedPart, buildFan } from "./hardwareGeometry";
+import { buildNF_A9x14 } from "./referenceModels";
+import { hardwareReferences } from "./hardwareReferences";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 
 const colors = {
@@ -43,7 +45,7 @@ export function createScene(host, onSelect, onReady, onAction = () => {}) {
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.075;
-  controls.minDistance = 5;
+  controls.minDistance = 0.45;
   controls.maxDistance = 40;
   controls.target.set(0, 0.25, 0.5);
   controls.maxPolarAngle = Math.PI * 0.9;
@@ -152,22 +154,25 @@ export function createScene(host, onSelect, onReady, onAction = () => {}) {
     return mesh;
   }
   function fan(group, r, axis = "z") {
-    const rotor = buildFan(
-      group,
-      r,
-      axis,
-      { box, cylinder },
-      !group.userData.id.startsWith("gpuFan"),
-    );
+    const rotor =
+      group.userData.id === "cpuFan"
+        ? buildNF_A9x14(group, { box, cylinder })
+        : buildFan(
+            group,
+            r,
+            axis,
+            { box, cylinder },
+            !group.userData.id.startsWith("gpuFan"),
+          );
     fans.push(rotor);
     mergeStaticMeshes(rotor);
   }
-  function textLabel(text, w = 1.3, compact = false) {
+  function textLabel(text, w = 1.3, compact = false, ink = "#e8eeee") {
     const canvas = document.createElement("canvas");
     canvas.width = compact ? 96 : 384;
     canvas.height = 96;
     const ctx = canvas.getContext("2d");
-    ctx.fillStyle = "#e8eeee";
+    ctx.fillStyle = ink;
     ctx.font = compact ? "700 64px sans-serif" : "600 30px sans-serif";
     ctx.textAlign = "center";
     ctx.fillText(text, canvas.width / 2, compact ? 72 : 57);
@@ -314,7 +319,8 @@ export function createScene(host, onSelect, onReady, onAction = () => {}) {
           for (const x of [-w * 0.39, w * 0.39])
             for (const z of [-d * 0.36, d * 0.36])
               box(g, [0.3, 0.15, 0.35], [x, -h / 2 - 0.07, z], 0x202628);
-          for (const y of [-1.24, -1.0, -0.76, -0.52]) {
+          // The upper two expansion positions are occupied by the graphics-card bracket.
+          for (const y of [-1.24, -1.0]) {
             box(g, [0.035, 0.16, 0.83], [-w / 2, y, 0.24], 0x515b60, 0.65);
             for (let z = 0; z < 7; z++)
               box(
@@ -542,7 +548,7 @@ export function createScene(host, onSelect, onReady, onAction = () => {}) {
     const air = {
       outsideIn: ["intake", [1, 0, 0]],
       intakeAir: ["intake", [-0.25, 0, 0]],
-      warmAir: ["cooler", [0, 0, 0.7]],
+      warmAir: ["cooler", [0, 0.5, 0.1]],
       exhaustAir: ["exhaust", [0.2, 0, 0]],
       outsideOut: ["exhaust", [-0.9, 0, 0]],
     };
@@ -579,7 +585,15 @@ export function createScene(host, onSelect, onReady, onAction = () => {}) {
         end = pos(to),
         middle = start.clone().lerp(end, 0.5);
       middle.z += 0.8;
-      const curve = new THREE.QuadraticBezierCurve3(start, middle, end);
+      const curve =
+        state.flow === "heat" && state.phase === 1 && from === "intakeAir"
+          ? new THREE.CatmullRomCurve3([
+              start,
+              groups.cpuFan.localToWorld(new THREE.Vector3(0, 0, 0.22)),
+              groups.cooler.localToWorld(new THREE.Vector3(0, 0, 0.04)),
+              end,
+            ])
+          : new THREE.QuadraticBezierCurve3(start, middle, end);
       curves.push(curve);
       const line = new THREE.Line(
         new THREE.BufferGeometry().setFromPoints(curve.getPoints(35)),
@@ -681,7 +695,12 @@ export function createScene(host, onSelect, onReady, onAction = () => {}) {
                 ? 0x14584a
                 : 0x000000,
           );
-          o.material.emissiveIntensity = p.id === state.selected ? 0.55 : 0.4;
+          o.material.emissiveIntensity =
+            hardwareReferences[p.id] && !state.related
+              ? 0
+              : p.id === state.selected
+                ? 0.55
+                : 0.4;
         }
       });
     });
@@ -891,7 +910,9 @@ export function createScene(host, onSelect, onReady, onAction = () => {}) {
     const activeFans =
       moving && hasMainPower(state.device) ? fans.filter(shown) : [];
     if (moving) time += dt;
-    activeFans.forEach((f) => (f.rotation.z -= dt * 4));
+    activeFans.forEach(
+      (f) => (f.rotation.z += (f.userData.spinDirection ?? -1) * dt * 4),
+    );
     for (const { dot, curve, offset } of particles) {
       dot.visible = !state.reducedMotion;
       dot.position.copy(curve.getPoint((time * 0.3 + offset) % 1));
@@ -978,10 +999,24 @@ export function createScene(host, onSelect, onReady, onAction = () => {}) {
       controls.update();
     },
     focus(id) {
-      const target = groups[id].position;
-      const delta = target.clone().sub(controls.target);
-      controls.target.copy(target);
-      camera.position.add(delta);
+      const bounds = new THREE.Box3().setFromObject(groups[id]);
+      const sphere = bounds.getBoundingSphere(new THREE.Sphere());
+      const direction = camera.position
+        .clone()
+        .sub(controls.target)
+        .normalize();
+      const usable = Math.min(
+        Math.max((height - 240) / height, 0.25),
+        Math.max((width - 80) / width, 0.25) * camera.aspect,
+      );
+      const distance = Math.max(
+        0.55,
+        (sphere.radius /
+          (Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * usable)) *
+          1.12,
+      );
+      controls.target.copy(sphere.center);
+      camera.position.copy(sphere.center).addScaledVector(direction, distance);
       controls.update();
     },
     inspectPower() {

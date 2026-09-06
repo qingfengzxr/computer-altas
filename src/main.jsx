@@ -37,6 +37,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import * as content from "./data";
+import { hardwareReferences } from "./hardwareReferences";
 import { translate, localize, readLanguage, LANGUAGE_STORAGE } from "./i18n";
 import { createScene } from "./Scene";
 import { AboutDialog } from "./AboutDialog";
@@ -79,6 +80,7 @@ function IconButton({ icon: Icon, label, active = false, ...rest }) {
   );
 }
 function App() {
+  const inspector = useRef(null);
   const [language, setLanguage] = useState(() => {
     try {
       return readLanguage(window.localStorage);
@@ -282,6 +284,7 @@ function App() {
     );
   }
   function chooseFlow(id) {
+    if (inspector.current) inspector.current.scrollTop = 0;
     setFlow(id);
     elapsed.current = 0;
     setPhase(0);
@@ -624,63 +627,6 @@ function App() {
               </button>
             </div>
           )}
-          {flow !== "none" && (
-            <div
-              className="flow-caption"
-              style={{ "--flow": flowInfo[flow].color }}
-            >
-              <span>
-                <i />
-                {flowInfo[flow].name}
-                <small>
-                  {!canShowFlow(flow, device)
-                    ? t("当前供电状态不可运行")
-                    : flowComplete
-                      ? t("本轮已完成")
-                      : reducedMotion
-                        ? t("逐步查看")
-                        : playing
-                          ? t("正在播放")
-                          : t("已暂停")}
-                </small>
-              </span>
-              <strong>
-                {flow === "power" && device === "standby"
-                  ? t("待机电源 5VSB → 主板启动控制电路")
-                  : flowStages[flow][phase].title}
-              </strong>
-              <p>
-                {flow === "power" && device === "standby"
-                  ? t("主电源尚未启动，风扇不转；等待机箱按钮发出启动请求。")
-                  : flowStages[flow][phase].detail}
-              </p>
-              <p>{flowInfo[flow].note}</p>
-              {canShowFlow(flow, device) && !flowVisible && (
-                <p>{t("当前阶段相关部件已隐藏")}</p>
-              )}
-              <div className="phase-controls">
-                <span>
-                  {t("阶段")}
-                  {phase + 1} / {flowStages[flow].length}
-                </span>
-                <IconButton
-                  icon={RotateCcw}
-                  label={t("重播当前流程")}
-                  onClick={() => chooseFlow(flow)}
-                  disabled={!canShowFlow(flow, device)}
-                />
-                <button
-                  onClick={advancePhase}
-                  disabled={flowComplete || !flowVisible}
-                >
-                  {phase + 1 === flowStages[flow].length
-                    ? t("完成观察")
-                    : t("下一阶段")}
-                  <ArrowRight size={14} />
-                </button>
-              </div>
-            </div>
-          )}
           <div className="stage-bottom">
             <div className="explosion-control">
               <div className="explode-title">
@@ -749,6 +695,7 @@ function App() {
         </main>
         <aside
           className="inspector"
+          ref={inspector}
           aria-label={
             mode === "explore"
               ? t("部件知识")
@@ -757,6 +704,64 @@ function App() {
                 : t("诊断挑战")
           }
         >
+          {flow !== "none" && (
+            <section
+              className="flow-caption"
+              style={{ "--flow": flowInfo[flow].color }}
+              aria-label={flowInfo[flow].name}
+            >
+              <span>
+                <i />
+                {flowInfo[flow].name}
+                <small>
+                  {!canShowFlow(flow, device)
+                    ? t("当前供电状态不可运行")
+                    : flowComplete
+                      ? t("本轮已完成")
+                      : reducedMotion
+                        ? t("逐步查看")
+                        : playing
+                          ? t("正在播放")
+                          : t("已暂停")}
+                </small>
+              </span>
+              <strong>
+                {flow === "power" && device === "standby"
+                  ? t("待机电源 5VSB → 主板启动控制电路")
+                  : flowStages[flow][phase].title}
+              </strong>
+              <p>
+                {flow === "power" && device === "standby"
+                  ? t("主电源尚未启动，风扇不转；等待机箱按钮发出启动请求。")
+                  : flowStages[flow][phase].detail}
+              </p>
+              <p>{flowInfo[flow].note}</p>
+              {canShowFlow(flow, device) && !flowVisible && (
+                <p>{t("当前阶段相关部件已隐藏")}</p>
+              )}
+              <div className="phase-controls">
+                <span>
+                  {t("阶段")}
+                  {phase + 1} / {flowStages[flow].length}
+                </span>
+                <IconButton
+                  icon={RotateCcw}
+                  label={t("重播当前流程")}
+                  onClick={() => chooseFlow(flow)}
+                  disabled={!canShowFlow(flow, device)}
+                />
+                <button
+                  onClick={advancePhase}
+                  disabled={flowComplete || !flowVisible}
+                >
+                  {phase + 1 === flowStages[flow].length
+                    ? t("完成观察")
+                    : t("下一阶段")}
+                  <ArrowRight size={14} />
+                </button>
+              </div>
+            </section>
+          )}
           {mode === "explore" && (
             <>
               <div className="inspector-top">
@@ -787,6 +792,28 @@ function App() {
                 <h3>{t("它的工作")}</h3>
                 <p className="part-summary">{part.summary}</p>
                 <p className="detail-text">{part.detail}</p>
+                {hardwareReferences[part.id] && (
+                  <div className="hardware-reference">
+                    <h3>{t("实物参考")}</h3>
+                    <strong>
+                      {hardwareReferences[part.id].manufacturer}{" "}
+                      {hardwareReferences[part.id].model}
+                    </strong>
+                    <span>{hardwareReferences[part.id].dimensions}</span>
+                    {part.id === "cooler" && (
+                      <span>{t("含风扇总高 37 mm")}</span>
+                    )}
+                    <a
+                      href={hardwareReferences[part.id].url}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {t("制造商规格")}
+                      <ExternalLink size={13} />
+                    </a>
+                    <small>{t("外形尺寸依照规格；未标注的细节为近似。")}</small>
+                  </div>
+                )}
                 <button
                   className="focus-button"
                   onClick={() => {

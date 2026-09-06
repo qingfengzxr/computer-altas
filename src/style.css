@@ -136,9 +136,6 @@ html[lang="en"] .part-detail h2 {
   font-size: 26px;
   line-height: 1.25;
 }
-html[lang="en"] .flow-caption {
-  max-width: min(430px, calc(100% - 65px));
-}
 html[lang="en"] .explosion-control {
   column-gap: 10px;
 }
@@ -691,15 +688,13 @@ html[lang="en"] .explosion-control {
   background: #4d654d;
 }
 .flow-caption {
-  position: absolute;
-  bottom: 154px;
-  left: 27px;
-  max-width: calc(100% - 65px);
+  flex-shrink: 0;
+  min-width: 0;
   color: #d8e4df;
-  background: #202b28ee;
-  border-radius: 5px;
-  padding: 13px 16px;
-  border-left: 1px solid var(--flow);
+  background: #202b28;
+  padding: 20px 24px;
+  border-bottom: 1px solid #435347;
+  overflow-wrap: anywhere;
 }
 .flow-caption > span {
   display: flex;
@@ -725,7 +720,7 @@ html[lang="en"] .explosion-control {
   font-weight: 500;
 }
 .flow-caption p {
-  font-size: 10px;
+  font-size: 12px;
   color: #a7b7ac;
   line-height: 1.7;
   margin-top: 5px;
@@ -737,6 +732,26 @@ html[lang="en"] .explosion-control {
   overflow: auto;
   min-height: 0;
   border-left: 1px solid var(--line);
+}
+.hardware-reference {
+  display: grid;
+  gap: 8px;
+  margin-top: 20px;
+  padding-block: 16px;
+  border-block: 1px solid var(--line);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.hardware-reference a {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--green);
+  text-underline-offset: 3px;
+}
+.hardware-reference small {
+  color: var(--muted);
+  line-height: 1.6;
 }
 .inspector-top {
   height: 60px;
@@ -1650,13 +1665,6 @@ html[lang="en"] .explosion-control {
     width: 100%;
     flex-shrink: 0;
   }
-  .stage:has(.flow-caption) {
-    height: 730px;
-    min-height: 730px;
-  }
-  .stage:has(.flow-caption) .canvas-host {
-    bottom: 200px;
-  }
   .stage-heading {
     top: 20px;
     left: 12px;
@@ -1795,19 +1803,13 @@ html[lang="en"] .explosion-control {
     min-height: 59px;
   }
   .flow-caption {
-    bottom: 168px;
-    left: 14px;
-    max-width: calc(100% - 28px);
-    padding: 10px 12px;
+    padding: 20px 24px;
   }
   .flow-caption strong {
-    font-size: 10px;
+    font-size: 13px;
   }
   .flow-caption p {
-    font-size: 9px;
-  }
-  html[lang="en"] .flow-caption {
-    max-width: calc(100% - 28px);
+    font-size: 12px;
   }
   html[lang="en"] .stage-heading h1 {
     font-size: 18px;
@@ -1823,20 +1825,6 @@ html[lang="en"] .explosion-control {
   }
   html[lang="en"] .flow-segments button {
     padding-inline: 8px;
-  }
-  html[lang="en"] .stage:has(.flow-caption) {
-    height: 770px;
-    min-height: 770px;
-  }
-  html[lang="en"] .stage:has(.flow-caption) .canvas-host {
-    bottom: 240px;
-  }
-  html[lang="en"] .flow-caption p {
-    font-size: 11px;
-    line-height: 1.5;
-  }
-  html[lang="en"] .flow-caption strong {
-    font-size: 12px;
   }
   html[lang="en"] .brand {
     gap: 7px;
