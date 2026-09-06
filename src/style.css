@@ -125,6 +125,40 @@ input[type="checkbox"] {
   font: inherit;
   font-size: 12px;
 }
+.openbidboard-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 140px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 4px;
+}
+.openbidboard-link picture {
+  display: flex;
+}
+.openbidboard-link img {
+  display: block;
+  width: 140px;
+  height: 32px;
+  object-fit: contain;
+}
+.openbidboard-link:hover {
+  background: #f2f6f3;
+}
+.openbidboard-link:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 3px;
+}
+@media (max-width: 1100px) {
+  .openbidboard-link {
+    width: 44px;
+  }
+  .openbidboard-link img {
+    width: 32px;
+    height: 32px;
+  }
+}
 .part-name,
 .part-detail h2,
 .lesson-detail h2,

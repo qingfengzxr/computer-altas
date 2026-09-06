@@ -420,6 +420,35 @@ function App() {
           ))}
         </nav>
         <div className="header-end">
+          <a
+            className="openbidboard-link"
+            href="https://openbidboard.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={
+              language === "en"
+                ? "OpenBidBoard (opens in a new tab)"
+                : "OpenBidBoard（在新标签页打开）"
+            }
+            title={
+              language === "en"
+                ? "OpenBidBoard (opens in a new tab)"
+                : "OpenBidBoard（在新标签页打开）"
+            }
+          >
+            <picture>
+              <source
+                media="(max-width: 1100px)"
+                srcSet={`${import.meta.env.BASE_URL}openbidboard-icon.webp`}
+              />
+              <img
+                src={`${import.meta.env.BASE_URL}openbidboard-logo.webp`}
+                alt="OpenBidBoard"
+                width="140"
+                height="32"
+              />
+            </picture>
+          </a>
           <select
             className="language-select"
             aria-label={language === "en" ? "Language" : "语言"}
