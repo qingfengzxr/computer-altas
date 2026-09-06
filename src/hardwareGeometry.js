@@ -51,7 +51,7 @@ export const hardwareDimensions = {
   pcie: { pos: [-0.67, -0.35, -0.59], size: [0.89, 0.09, 0.13] },
   psu: { pos: [-0.7, -1.88, -0.05], size: [1.6, 0.8, 1.75] },
   usb: { pos: [-1.335, 0.26, -0.585], size: [0.33, 0.36, 0.15] },
-  network: { pos: [-1.335, 0.88, -0.3] },
+  network: { pos: [-1.335, 0.88, -0.58], size: [0.33, 0.135, 0.16] },
   display: { pos: [-1.4, -0.49, 0.02], size: [0.2, 0.42, 1.2] },
   case: { size: [3, 4.65, 2.5] },
   panel: { size: [2.98, 4.62, 0.04] },
@@ -631,41 +631,42 @@ export function buildDetailedPart(g, p, helpers) {
         box(g, [0.12, 0.012, d], [-w / 2 + 0.06, h / 2 - 0.006, 0], metal, 0.8);
         return true;
       }
-      box(g, p.size, [0, 0, 0], metal, 0.8);
-      const count = p.id === "usb" ? 4 : p.id === "display" ? 3 : 1;
-      for (let i = 0; i < count; i++) {
-        const py = p.id === "usb" ? -h * 0.36 + i * h * 0.24 : 0,
-          pz = p.id === "display" ? -d * 0.31 + i * d * 0.31 : 0;
-        const ph = p.id === "usb" ? h * 0.17 : h * 0.7,
-          pd = p.id === "display" ? d * 0.24 : d * 0.77;
-        box(g, [0.008, ph, pd], [-w / 2 - 0.006, py, pz], 0x10191c);
-        if (p.id === "usb")
-          box(
-            g,
-            [0.009, ph * 0.28, pd * 0.8],
-            [-w / 2 - 0.012, py, pz],
-            0x356895,
-          );
-        for (let j = 0; j < (p.kind === "network" ? 8 : 4); j++)
-          box(
-            g,
-            [0.009, 0.014, pd * 0.035],
-            [
-              -w / 2 - 0.012,
-              py - ph * 0.25,
-              pz - pd * 0.34 + (j * pd * 0.68) / (p.kind === "network" ? 7 : 3),
-            ],
-            gold,
-          );
-        if (p.kind === "network")
-          for (const z of [-pd * 0.5, pd * 0.5])
-            box(
-              g,
-              [0.012, 0.035, 0.03],
-              [-w / 2 - 0.015, ph * 0.53, z],
-              z < 0 ? 0x426c3d : 0xad8241,
-            );
+      const shield = rectangle(d, h);
+      // Generic 8P8C socket mouth with a lower opening for the plug latch.
+      shield.holes.push(
+        new THREE.Path(
+          [
+            [-0.059, 0.0425],
+            [0.059, 0.0425],
+            [0.059, -0.0325],
+            [0.025, -0.0325],
+            [0.025, -0.0475],
+            [-0.025, -0.0475],
+            [-0.025, -0.0325],
+            [-0.059, -0.0325],
+            [-0.059, 0.0425],
+          ].map(([x, y]) => new THREE.Vector2(x, y)),
+        ),
+      );
+      rearShell(shield, w, -w / 2).userData.feature = "ethernet-shell";
+      box(g, [0.01, h - 0.008, d - 0.008], [w / 2 - 0.005, 0, 0], black);
+      for (let pin = 0; pin < 8; pin++) {
+        const contact = box(
+          g,
+          [0.095, 0.003, 0.0036],
+          [-0.087, 0.018, (pin - 3.5) * 0.0102],
+          gold,
+        );
+        contact.rotation.z = 0.18;
+        contact.userData.feature = "ethernet-contact";
       }
+      for (const z of [-0.063, 0.063])
+        box(
+          g,
+          [0.006, 0.013, 0.023],
+          [-w / 2 + 0.001, 0.054, z],
+          z < 0 ? 0x426c3d : 0xad8241,
+        ).userData.feature = "ethernet-led";
       return true;
     }
     case "battery": {

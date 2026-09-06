@@ -151,6 +151,49 @@ test("four USB-A sockets have compact openings and sit on the motherboard face",
     mesh.material?.dispose();
   });
 });
+test("Ethernet jack has a compact 8P8C mouth and rests on the motherboard", () => {
+  const group = new THREE.Group();
+  buildDetailedPart(group, byId.network, helpers);
+  group.position.set(...byId.network.pos);
+  const bounds = new THREE.Box3().setFromObject(group);
+  const size = bounds.getSize(new THREE.Vector3());
+  assert.ok(Math.abs(size.z * 100 - 16) < 1e-5);
+  assert.ok(Math.abs(size.y * 100 - 13.5) < 1e-5);
+  assert.ok(
+    Math.abs(bounds.min.z - (byId.board.pos[2] + byId.board.size[2] / 2)) <
+      1e-6,
+  );
+  assert.equal(
+    group.children.filter((m) => m.userData.feature === "ethernet-contact")
+      .length,
+    8,
+  );
+  assert.equal(
+    group.children.filter((m) => m.userData.feature === "ethernet-led").length,
+    2,
+  );
+  const shell = group.children.find(
+    (m) => m.userData.feature === "ethernet-shell",
+  );
+  const opening = shell.geometry.parameters.shapes.holes[0];
+  const mouth = new THREE.Box2()
+    .setFromPoints(opening.getPoints())
+    .getSize(new THREE.Vector2());
+  assert.ok(Math.abs(mouth.x * 100 - 11.8) < 1e-6);
+  // Check both the main cavity and the latch cutout, excluding the rear wall.
+  group.updateMatrixWorld(true);
+  for (const y of [0, -0.04]) {
+    const ray = new THREE.Raycaster(
+      new THREE.Vector3(-2, byId.network.pos[1] + y, byId.network.pos[2]),
+      new THREE.Vector3(1, 0, 0),
+    );
+    assert.equal(ray.intersectObject(shell).length, 0);
+  }
+  group.traverse((m) => {
+    m.geometry?.dispose();
+    m.material?.dispose();
+  });
+});
 test("swept fan blades have finite, pitched geometry", () => {
   const geometry = createRotorGeometry(0.46);
   geometry.computeBoundingBox();

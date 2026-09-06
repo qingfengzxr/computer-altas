@@ -15,7 +15,7 @@ One world unit represents 100 mm. Y points upward, +X toward the front intake, a
 
 The board, CPU socket, CPU lid, and cooler base share an assembled contact relationship. Rear USB, Ethernet, display, and PSU faces align with the case rear. Memory stands perpendicular to the motherboard, with its contact edge entering the DIMM slot. The GPU PCB is perpendicular to the motherboard, and its shortened edge connector aligns with the PCIe slot. A drive cage supports the HDD.
 
-The video receptacles now mount against an extended rear GPU PCB and pass through a perforated double-slot bracket. They share the graphics card's displacement through the initial 0-35% disassembly range before becoming independent items in the flat inventory. The case omits blank covers in the two occupied expansion positions. USB-A sockets use 12.5 x 5.5 mm openings in a 15 mm-wide, 36 mm-high four-port housing, replacing the oversized 53 mm-wide block. These connector shapes and mounting details remain generic, not vendor mechanical drawings.
+The video receptacles now mount against an extended rear GPU PCB and pass through a perforated double-slot bracket. They share the graphics card's displacement through the initial 0-35% disassembly range before becoming independent items in the flat inventory. The case omits blank covers in the two occupied expansion positions. USB-A sockets use 12.5 x 5.5 mm openings in a 15 mm-wide, 36 mm-high four-port housing, replacing the oversized 53 mm-wide block. The Ethernet jack has a 16 x 13.5 mm front housing, an 11.8 mm-wide 8P8C opening with a latch cutout, eight contacts and two LED windows. Its base rests on the motherboard face. These connector shapes and mounting details remain generic, not vendor mechanical drawings; the rear-I/O housing depth accommodates the simplified motherboard/case layout.
 
 ## Geometry and materials
 
@@ -37,7 +37,7 @@ The 29 selectable component IDs, bilingual content, English default, lessons, di
 
 ## Verification on 2026-09-06
 
-- 22 unit tests passed, including reference-part mesh dimensions and counts, impeller batch compatibility, nominal form factors, rear-face alignment, CPU/cooler contact, video receptacle/PCB contact through initial disassembly, USB opening dimensions, finite pitched-blade geometry, translation coverage, power transitions, flows, and flat layout.
+- 23 unit tests passed, including reference-part mesh dimensions and counts, impeller batch compatibility, nominal form factors, rear-face alignment, CPU/cooler contact, video receptacle/PCB contact through initial disassembly, USB and Ethernet opening dimensions, Ethernet latch clearance and contact count, finite pitched-blade geometry, translation coverage, power transitions, flows, and flat layout.
 - Production build passed. The existing Vite large-chunk warning remains; the main JS transfer is approximately 240 kB gzip.
 - Playwright with local Chrome software WebGL: desktop 1440 × 1000, mobile 390 × 844, plus reduced-motion mode.
 - All 29 visible parts have non-overlapping projected bounds at full disassembly on desktop and mobile. No horizontal page overflow; returning to 0% restores all assembled positions.
