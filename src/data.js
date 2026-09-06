@@ -1,3 +1,5 @@
+import { hardwareDimensions } from "./hardwareGeometry.js";
+
 export const systems = [
   { id: "compute", name: "计算系统", color: "#6aaed9" },
   { id: "storage", name: "存储系统", color: "#b19bdb" },
@@ -27,8 +29,8 @@ const p = (
   en,
   system,
   kind,
-  pos,
-  size,
+  pos: hardwareDimensions[id]?.pos ?? pos,
+  size: hardwareDimensions[id]?.size ?? size,
   explode,
   summary,
   detail,

@@ -5,6 +5,8 @@ import { parts, byId, flowInfo } from "./data";
 import { layoutInventory } from "./inventoryLayout";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { hasMainPower, flowSegments } from "./simulation";
+import { buildDetailedPart, buildFan } from "./hardwareGeometry";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 
 const colors = {
   pcb: 0x245950,
@@ -23,7 +25,14 @@ export function createScene(host, onSelect, onReady, onAction = () => {}) {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.7));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.5;
+  renderer.toneMappingExposure = 1.05;
+  const environmentRoom = new RoomEnvironment();
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const environmentTarget = pmrem.fromScene(environmentRoom, 0.04);
+  scene.environment = environmentTarget.texture;
+  scene.environmentIntensity = 0.65;
+  environmentRoom.dispose();
+  pmrem.dispose();
   host.appendChild(renderer.domElement);
   renderer.domElement.setAttribute(
     "aria-label",
@@ -38,15 +47,15 @@ export function createScene(host, onSelect, onReady, onAction = () => {}) {
   controls.maxDistance = 40;
   controls.target.set(0, 0.25, 0.5);
   controls.maxPolarAngle = Math.PI * 0.9;
-  scene.add(new THREE.HemisphereLight(0xe7f4ff, 0x465251, 3));
-  const key = new THREE.DirectionalLight(0xfff3de, 4);
+  scene.add(new THREE.HemisphereLight(0xe7f0f5, 0x303b35, 1.65));
+  const key = new THREE.DirectionalLight(0xfff4e5, 3);
   key.position.set(3, 8, 7);
   scene.add(key);
   const rim = new THREE.DirectionalLight(0x99d5e6, 2);
   rim.position.set(-5, 2, -2);
   scene.add(rim);
   const grid = new THREE.GridHelper(24, 48, 0x52605d, 0x36423f);
-  grid.position.y = -3.43;
+  grid.position.y = -2.49;
   grid.material.transparent = true;
   grid.material.opacity = 0.36;
   scene.add(grid);
@@ -143,28 +152,13 @@ export function createScene(host, onSelect, onReady, onAction = () => {}) {
     return mesh;
   }
   function fan(group, r, axis = "z") {
-    const spin = new THREE.Group();
-    group.add(spin);
-    if (axis === "x") spin.rotation.y = Math.PI / 2;
-    if (axis === "y") spin.rotation.x = -Math.PI / 2;
-    cylinder(spin, r * 0.21, 0.12, [0, 0, 0], 0xa5b2b4);
-    const ring = new THREE.Mesh(
-      new THREE.TorusGeometry(r * 0.93, 0.035, 8, 48),
-      mat(0x889797),
+    const rotor = buildFan(
+      group,
+      r,
+      axis,
+      { box, cylinder },
+      !group.userData.id.startsWith("gpuFan"),
     );
-    spin.add(ring);
-    const rotor = new THREE.Group();
-    spin.add(rotor);
-    for (let i = 0; i < 9; i++) {
-      const a = (i * Math.PI * 2) / 9;
-      const blade = box(
-        rotor,
-        [r * 0.46, r * 0.7, 0.034],
-        [Math.sin(a) * r * 0.53, Math.cos(a) * r * 0.53, 0],
-        0x4b5e5d,
-      );
-      blade.rotation.z = -a + 0.5;
-    }
     fans.push(rotor);
     mergeStaticMeshes(rotor);
   }
@@ -195,211 +189,171 @@ export function createScene(host, onSelect, onReady, onAction = () => {}) {
     scene.add(g);
     groups[p.id] = g;
     const [w, h, d] = p.size;
-    switch (p.kind) {
-      case "board": {
-        box(g, p.size, [0, 0, 0], colors.pcb);
-        for (let i = 0; i < 34; i++) {
-          const x = -1.15 + (i % 12) * 0.205,
-            y = -1.5 + Math.floor(i / 12) * 1.1;
-          box(
-            g,
-            [0.012, 0.65, 0.008],
-            [x, y, 0.064],
-            i % 3 ? 0x397369 : 0xb59c58,
-          );
-          box(g, [0.12, 0.06, 0.065], [x, y - 0.31, 0.09], colors.black);
+    const detailed = buildDetailedPart(g, p, { box, cylinder, textLabel });
+    if (p.kind === "board")
+      indicator(g, [0.05, 0.025, 0.025], [1.03, -1.35, 0.028], "standby");
+    if (!detailed)
+      switch (p.kind) {
+        case "fan":
+          fan(g, w * 0.46);
+          break;
+        case "sideFan":
+          fan(g, h * 0.46, "x");
+          break;
+        case "gpuFan":
+          fan(g, w * 0.44, "y");
+          break;
+
+        case "psu": {
+          box(g, p.size, [0, 0, 0], 0x303439);
+          // A perforated rear grille, separate from the mains inlet and rocker.
+          for (let y = 0; y < 6; y++)
+            for (let z = 0; z < 11; z++)
+              cylinder(
+                g,
+                0.023,
+                0.005,
+                [-w / 2 - 0.003, -0.3 + y * 0.11, -0.76 + z * 0.145],
+                0x0c1114,
+                "x",
+              );
+          for (const y of [-0.34, 0.34])
+            for (const z of [-0.79, 0.79])
+              cylinder(g, 0.022, 0.012, [-w / 2 - 0.008, y, z], 0x9da3a5, "x");
+          for (let i = 0; i < 4; i++) {
+            box(
+              g,
+              [0.016, 0.18, 0.26],
+              [w / 2 + 0.01, -0.1, -0.6 + i * 0.36],
+              0x151c1e,
+            );
+            for (let j = 0; j < 4; j++)
+              box(
+                g,
+                [0.018, 0.06, 0.035],
+                [w / 2 + 0.022, -0.1, -0.69 + i * 0.36 + j * 0.055],
+                0x68716d,
+              );
+          }
+          for (let i = 0; i < 11; i++)
+            box(
+              g,
+              [w * 0.68, 0.028, 0.02],
+              [0, -0.28 + i * 0.05, d / 2 + 0.01],
+              0x191f22,
+            );
+          const t = textLabel("POWER / ATX", 1.18);
+          t.position.set(0, 0.18, d / 2 + 0.022);
+          g.add(t);
+          box(g, [0.04, 0.32, 0.46], [-w / 2 - 0.025, -0.12, -0.38], 0x121818);
+          for (const [y, z] of [
+            [-0.06, -0.49],
+            [-0.06, -0.27],
+            [-0.21, -0.38],
+          ])
+            box(g, [0.035, 0.035, 0.075], [-w / 2 - 0.055, y, z], 0xa7b4ad);
+          box(g, [0.045, 0.32, 0.3], [-w / 2 - 0.025, 0.13, 0.36], 0x111817);
+          rocker = new THREE.Group();
+          rocker.position.set(-w / 2 - 0.065, 0.13, 0.36);
+          g.add(rocker);
+          const lever = box(rocker, [0.045, 0.25, 0.24], [0, 0, 0], 0x768780);
+          lever.userData.action = "toggleAc";
+          for (const [text, y] of [
+            ["I", 0.065],
+            ["0", -0.065],
+          ]) {
+            const label = textLabel(text, 0.1, true);
+            label.rotation.y = -Math.PI / 2;
+            label.position.set(-0.028, y, 0);
+            label.userData.action = "toggleAc";
+            rocker.add(label);
+          }
+          break;
         }
-        for (const x of [-1.17, 1.17])
-          for (const y of [-1.58, 1.58])
-            cylinder(g, 0.053, 0.025, [x, y, 0.075], colors.gold);
-        const t = textLabel("ATLAS / ATX", 1);
-        t.position.set(-0.5, -1.45, 0.07);
-        g.add(t);
-        indicator(g, [0.09, 0.065, 0.04], [1.1, -1.46, 0.1], "standby");
-        break;
-      }
-      case "cpu": {
-        box(g, p.size, [0, 0, 0], 0x8eaaa2);
-        box(g, [w * 0.87, h * 0.87, d * 0.6], [0, 0, d * 0.65], 0xd5dcda, 0.8);
-        const t = textLabel("CPU", 0.5);
-        t.position.set(0, 0, 0.105);
-        g.add(t);
-        break;
-      }
-      case "socket":
-        box(g, p.size, [0, 0, 0], 0x4c5352);
-        box(g, [w * 0.8, h * 0.8, 0.02], [0, 0, 0.08], 0x8f968a);
-        break;
-      case "cooler":
-        box(g, [0.7, 0.7, 0.08], [0, 0, -d / 2], 0xb39776, 0.8);
-        for (let i = 0; i < 17; i++)
-          box(g, [w, 0.027, d], [0, -h / 2 + (i * h) / 16, 0], 0xa8b6b7, 0.8);
-        for (const x of [-0.27, 0.27])
-          cylinder(g, 0.065, h, [x, 0, 0], 0xc79262, "y");
-        break;
-      case "fan":
-        for (const x of [-w * 0.46, w * 0.46])
-          box(g, [w * 0.08, h, d], [x, 0, 0], colors.black);
-        for (const y of [-h * 0.46, h * 0.46])
-          box(g, [w, h * 0.08, d], [0, y, 0], colors.black);
-        fan(g, w * 0.46);
-        break;
-      case "sideFan":
-        for (const y of [-h * 0.46, h * 0.46])
-          box(g, [w, h * 0.08, d], [0, y, 0], colors.black);
-        for (const z of [-d * 0.46, d * 0.46])
-          box(g, [w, h, d * 0.08], [0, 0, z], colors.black);
-        fan(g, h * 0.46, "x");
-        break;
-      case "gpuFan":
-        fan(g, w * 0.49, "y");
-        break;
-      case "ram": {
-        box(g, p.size, [0, 0, 0], 0x2d6e60);
-        box(g, [w * 1.1, h * 0.9, 0.09], [0, 0, d * 0.5], 0xa5bcc0);
-        for (let i = 0; i < 6; i++)
-          box(
+
+        case "chipset":
+          box(g, p.size, [0, 0, 0], 0x6b8581);
+          for (let i = 0; i < 6; i++)
+            box(g, [w, 0.025, 0.04], [0, -0.24 + i * 0.085, 0.1], 0xadc0b7);
+          break;
+        case "vrm":
+          for (let i = 0; i < 5; i++)
+            box(g, [w, 0.16, d], [0, -h / 2 + 0.1 + i * 0.22, 0], 0x849a97);
+          break;
+
+        case "button":
+          box(g, p.size, [0, 0, 0], 0xb4c9c3).userData.action = "pressCase";
+          indicator(
             g,
-            [0.023, 0.17, 0.24],
-            [w * 0.57, -0.63 + i * 0.25, 0],
-            colors.black,
-          );
-        break;
-      }
-      case "gpu": {
-        box(g, p.size, [0, 0, 0], 0x283836);
-        box(g, [w, 0.045, d], [0, h / 2 + 0.015, 0], 0x6d8180, 0.7);
-        for (let i = 0; i < 26; i++)
-          box(
-            g,
-            [0.032, 0.22, d * 0.8],
-            [-w / 2 + 0.1 + (i * (w - 0.2)) / 26, 0, 0],
-            0x9aabaa,
-            0.8,
-          );
-        box(g, [w, 0.2, 0.065], [0, 0, d / 2], 0x323b3d);
-        const t = textLabel("GRAPHICS", 1.3);
-        t.position.set(0, 0, d / 2 + 0.038);
-        g.add(t);
-        break;
-      }
-      case "psu": {
-        box(g, p.size, [0, 0, 0], 0x333e40);
-        for (let i = 0; i < 11; i++)
-          box(
-            g,
-            [w * 0.68, 0.028, 0.02],
-            [0, -0.28 + i * 0.05, d / 2 + 0.01],
-            0x667471,
-          );
-        const t = textLabel("POWER / ATX", 1.18);
-        t.position.set(0, 0.18, d / 2 + 0.022);
-        g.add(t);
-        box(g, [0.04, 0.32, 0.46], [-w / 2 - 0.025, -0.12, -0.38], 0x121818);
-        for (const [y, z] of [
-          [-0.06, -0.49],
-          [-0.06, -0.27],
-          [-0.21, -0.38],
-        ])
-          box(g, [0.035, 0.035, 0.075], [-w / 2 - 0.055, y, z], 0xa7b4ad);
-        box(g, [0.045, 0.32, 0.3], [-w / 2 - 0.025, 0.13, 0.36], 0x111817);
-        rocker = new THREE.Group();
-        rocker.position.set(-w / 2 - 0.065, 0.13, 0.36);
-        g.add(rocker);
-        const lever = box(rocker, [0.045, 0.25, 0.24], [0, 0, 0], 0x768780);
-        lever.userData.action = "toggleAc";
-        for (const [text, y] of [
-          ["I", 0.065],
-          ["0", -0.065],
-        ]) {
-          const label = textLabel(text, 0.1, true);
-          label.rotation.y = -Math.PI / 2;
-          label.position.set(-0.028, y, 0);
-          label.userData.action = "toggleAc";
-          rocker.add(label);
-        }
-        break;
-      }
-      case "hdd":
-        box(g, p.size, [0, 0, 0], 0x7e9093, 0.8);
-        box(g, [w * 0.78, h * 0.72, 0.02], [0, 0, d / 2 + 0.01], 0xc6d0cb);
-        break;
-      case "ssd":
-        box(g, p.size, [0, 0, 0], 0x27624f);
-        for (let i = 0; i < 3; i++)
-          box(g, [0.24, 0.23, 0.04], [-0.34 + i * 0.32, 0, 0.06], 0x252c2d);
-        break;
-      case "chipset":
-        box(g, p.size, [0, 0, 0], 0x6b8581);
-        for (let i = 0; i < 6; i++)
-          box(g, [w, 0.025, 0.04], [0, -0.24 + i * 0.085, 0.1], 0xadc0b7);
-        break;
-      case "vrm":
-        for (let i = 0; i < 5; i++)
-          box(g, [w, 0.16, d], [0, -h / 2 + 0.1 + i * 0.22, 0], 0x849a97);
-        break;
-      case "battery":
-        cylinder(g, w / 2, d, [0, 0, 0], 0xcbd4cd);
-        break;
-      case "ports":
-      case "network":
-        box(g, p.size, [0, 0, 0], 0xa0aca8);
-        box(
-          g,
-          [0.03, h * 0.64, d * 0.75],
-          [-w / 2 - 0.005, 0, 0],
-          p.kind === "network" ? 0x1f332a : 0x243f59,
-        );
-        break;
-      case "connector":
-        box(g, p.size, [0, 0, 0], 0x303533);
-        for (let i = 0; i < 4; i++)
-          box(
-            g,
-            [w * 0.5, h * 0.1, 0.025],
-            [0, -h * 0.34 + i * h * 0.23, d / 2 + 0.01],
-            colors.gold,
-          );
-        break;
-      case "button":
-        box(g, p.size, [0, 0, 0], 0xb4c9c3).userData.action = "pressCase";
-        indicator(
-          g,
-          [w * 0.38, 0.025, d * 0.3],
-          [0, h / 2 + 0.017, 0],
-          "power",
-        ).userData.action = "pressCase";
-        break;
-      case "case": {
-        for (const x of [-w / 2, w / 2])
-          for (const z of [-d / 2, d / 2])
-            box(g, [0.065, h, 0.065], [x, 0, z], 0x8b9b9c, 0.75);
-        for (const y of [-h / 2, h / 2]) {
-          for (const z of [-d / 2, d / 2])
-            box(g, [w, 0.065, 0.065], [0, y, z], 0x8b9b9c, 0.75);
+            [w * 0.38, 0.025, d * 0.3],
+            [0, h / 2 + 0.017, 0],
+            "power",
+          ).userData.action = "pressCase";
+          break;
+        case "case": {
           for (const x of [-w / 2, w / 2])
-            box(g, [0.065, 0.065, d], [x, y, 0], 0x8b9b9c, 0.75);
+            for (const z of [-d / 2, d / 2])
+              box(g, [0.065, h, 0.065], [x, 0, z], 0x4c5459, 0.7);
+          for (const y of [-h / 2, h / 2]) {
+            for (const z of [-d / 2, d / 2])
+              box(g, [w, 0.065, 0.065], [0, y, z], 0x8b9b9c, 0.75);
+            for (const x of [-w / 2, w / 2])
+              box(g, [0.065, 0.065, d], [x, y, 0], 0x8b9b9c, 0.75);
+          }
+          box(g, [w, 0.09, d], [0, -h / 2, 0], 0x596867);
+          box(g, [w, h, 0.025], [0, 0, -d / 2], 0x4b5c58);
+          // Motherboard tray and standoffs; the open side remains available for teaching.
+          box(g, [2.7, 3.25, 0.027], [0, 0.25, -0.78], 0x454c50, 0.55);
+          for (const x of [0.36, 1.4]) {
+            box(g, [0.04, 0.4, 1.5], [x, -2.12, 0.1], 0x444e52, 0.65);
+            box(g, [0.11, 0.025, 1.5], [x, -1.93, 0.1], 0x737d81, 0.7);
+          }
+          for (const x of [-1.12, 0, 1.12])
+            for (const y of [-1.15, 0.25, 1.65])
+              cylinder(g, 0.037, 0.1, [x, y, -0.721], 0xb9a16d);
+          for (const x of [-w * 0.39, w * 0.39])
+            for (const z of [-d * 0.36, d * 0.36])
+              box(g, [0.3, 0.15, 0.35], [x, -h / 2 - 0.07, z], 0x202628);
+          for (const y of [-1.24, -1.0, -0.76, -0.52]) {
+            box(g, [0.035, 0.16, 0.83], [-w / 2, y, 0.24], 0x515b60, 0.65);
+            for (let z = 0; z < 7; z++)
+              box(
+                g,
+                [0.038, 0.065, 0.055],
+                [-w / 2 - 0.002, y, -0.07 + z * 0.1],
+                0x182123,
+              );
+          }
+          for (const y of [-0.3, 0.85, 1.97])
+            box(g, [0.022, 0.32, 0.2], [1.28, y, -0.77], 0x1b2425);
+          for (const z of [-d / 2, d / 2])
+            for (const y of [-h / 2 + 0.16, h / 2 - 0.16])
+              cylinder(g, 0.024, 0.014, [w / 2 + 0.036, y, z], 0x9aa3a5, "x");
+          box(g, [0.27, 0.035, 0.08], [1.2, h / 2 + 0.015, -0.18], 0x171e20);
+          box(g, [0.27, 0.035, 0.08], [1.2, h / 2 + 0.015, 0.04], 0x171e20);
+          break;
         }
-        box(g, [w, 0.09, d], [0, -h / 2, 0], 0x596867);
-        box(g, [w, h, 0.025], [0, 0, -d / 2], 0x4b5c58);
-        break;
+        case "panel": {
+          const m = box(g, p.size, [0, 0, 0], 0x9bbabd);
+          m.material.transparent = true;
+          m.material.opacity = 0.13;
+          m.material.depthWrite = false;
+          const edges = new THREE.LineSegments(
+            new THREE.EdgesGeometry(m.geometry),
+            new THREE.LineBasicMaterial({ color: 0x88b6bb }),
+          );
+          g.add(edges);
+          for (const x of [-w * 0.46, w * 0.46])
+            for (const y of [-h * 0.47, h * 0.47])
+              cylinder(g, 0.03, 0.025, [x, y, 0.035], 0x929b9f);
+          break;
+        }
+        default:
+          box(g, p.size, [0, 0, 0], colors.black);
       }
-      case "panel": {
-        const m = box(g, p.size, [0, 0, 0], 0x9bbabd);
-        m.material.transparent = true;
-        m.material.opacity = 0.13;
-        m.material.depthWrite = false;
-        const edges = new THREE.LineSegments(
-          new THREE.EdgesGeometry(m.geometry),
-          new THREE.LineBasicMaterial({ color: 0x88b6bb }),
-        );
-        g.add(edges);
-        break;
-      }
-      default:
-        box(g, p.size, [0, 0, 0], colors.black);
-    }
-    mergeStaticMeshes(g);
+    g.traverse((node) => {
+      if (node.isGroup) mergeStaticMeshes(node);
+    });
     g.traverse((o) => {
       if (o.isMesh) {
         o.userData.partId = p.id;
@@ -435,6 +389,119 @@ export function createScene(host, onSelect, onReady, onAction = () => {}) {
   scene.add(flowGroup);
   let curves = [],
     particles = [];
+  const harness = new THREE.Group();
+  scene.add(harness);
+  function buildHarness() {
+    harness.traverse((o) => {
+      o.geometry?.dispose();
+      o.material?.dispose();
+    });
+    harness.clear();
+    if (state.explosion > 0.35) return;
+    const connections = [
+      {
+        from: "psu",
+        to: "atx",
+        a: [0.82, -0.1, 0.1],
+        b: [0, 0, 0.11],
+        via: [
+          [1.32, -1.25, -0.98],
+          [1.32, 0.4, -0.98],
+          [1.23, 0.54, -0.29],
+        ],
+        wires: 6,
+        color: 0x30363a,
+      },
+      {
+        from: "psu",
+        to: "eps",
+        a: [0.82, -0.1, -0.4],
+        b: [0, 0, 0.11],
+        via: [
+          [0.4, -1.3, -1.04],
+          [-1.28, -1.1, -1.04],
+          [-1.28, 1.92, -1.04],
+          [-1.02, 1.86, -0.35],
+        ],
+        wires: 4,
+        color: 0x353a3e,
+      },
+      {
+        from: "psu",
+        to: "gpu",
+        a: [0.82, -0.1, 0.4],
+        b: [0.85, 0.22, 0.53],
+        via: [
+          [0.4, -1.3, 0.86],
+          [1.23, -0.84, 0.9],
+          [1.22, -0.25, 0.75],
+        ],
+        wires: 4,
+        color: 0x2c3338,
+      },
+      {
+        from: "psu",
+        to: "hdd",
+        a: [0.82, -0.1, -0.3],
+        b: [-0.14, -0.025, -0.78],
+        via: [
+          [0.22, -2.02, -0.97],
+          [0.6, -2.02, -0.97],
+        ],
+        wires: 3,
+        color: 0x34393c,
+      },
+      {
+        from: "sata",
+        to: "hdd",
+        a: [0.14, 0.057, 0],
+        b: [0.23, -0.025, -0.78],
+        via: [
+          [1.38, -1.16, -0.36],
+          [1.38, -1.56, -0.84],
+        ],
+        wires: 1,
+        color: 0x775d4a,
+      },
+      {
+        from: "switch",
+        to: "board",
+        a: [0, -0.06, 0],
+        b: [0.92, -1.38, 0.04],
+        via: [
+          [1.39, 2.02, -0.96],
+          [1.39, -1.05, -0.96],
+        ],
+        wires: 2,
+        color: 0x394d49,
+      },
+    ];
+    for (const c of connections) {
+      if (!groups[c.from].visible || !groups[c.to].visible) continue;
+      const start = groups[c.from].localToWorld(new THREE.Vector3(...c.a));
+      const end = groups[c.to].localToWorld(new THREE.Vector3(...c.b));
+      for (let i = 0; i < c.wires; i++) {
+        const offset = (i - (c.wires - 1) / 2) * 0.024;
+        const points = [
+          start,
+          ...c.via.map((v) => new THREE.Vector3(...v)),
+          end,
+        ].map((p) => p.clone().add(new THREE.Vector3(0, offset, 0)));
+        const mesh = new THREE.Mesh(
+          new THREE.TubeGeometry(
+            new THREE.CatmullRomCurve3(points),
+            40,
+            c.wires === 1 ? 0.024 : 0.011,
+            6,
+            false,
+          ),
+          mat(c.color, 0.05, 0.8),
+        );
+        harness.add(mesh);
+      }
+    }
+    mergeStaticMeshes(harness);
+  }
   let state = {
     selected: "cpu",
     explosion: 0.23,
@@ -618,6 +685,7 @@ export function createScene(host, onSelect, onReady, onAction = () => {}) {
         }
       });
     });
+    if (layoutChanged || !harness.children.length) buildHarness();
     for (const o of relatedOutlines) {
       scene.remove(o);
       o.geometry.dispose();
@@ -951,6 +1019,7 @@ export function createScene(host, onSelect, onReady, onAction = () => {}) {
         }
       });
       renderer.dispose();
+      environmentTarget.dispose();
       renderer.domElement.remove();
       labelLayer.remove();
     },
